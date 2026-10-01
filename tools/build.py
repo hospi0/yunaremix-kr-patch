@@ -9,6 +9,7 @@ r"""유나 리믹스 한글 빌드 (2026-10-01) — 원본 트랙 1 → work/out
        그 문자열을 가리키는 명령 인수만 고침 — 0x200F·0x2013 의 인수 1(전수 확인: 옮길 46개 모두 이 두 자리, 나머지 일치는 숫자 우연).
      · 블록 ≤ 0x8000 검사.
   ④ 그림: 옵션 TITPS.CSA·달력 CALDATA/CLTES3.GS8(gfx.py) · 제목 TBG00‥12.SS1(gfx_title.py)
+  ⑤ 동영상: work/kr/*.CPK(moviesub.py 자막 16 · moviecap.py 지명 캡션 7) 제자리
   python tools/build.py → work/out/Ginga Ojousama Densetsu Yuna Remix (Japan) (Track 1).bin
 """
 import glob, os, struct, sys
@@ -203,7 +204,14 @@ def main():
     files.update(gfx_title.main())
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     iso.patch(ROM, OUT, files)
-    iso.patch_sub(OUT, {'CALDATA/CLTES3.GS8': G['CALDATA/CLTES3.GS8']})
+    sub = {'CALDATA/CLTES3.GS8': G['CALDATA/CLTES3.GS8']}
+    # ⑤ 동영상(tools/moviesub.py 자막 · tools/moviecap.py 지명 캡션이 구운 work/kr/<영상>.CPK, 원본 크기 그대로 — 느려서 빌드 때 다시 굽지 않음)
+    import moviesub
+    mov = {moviesub.disc_path(os.path.basename(p)[:-4]): open(p, 'rb').read()
+           for p in sorted(glob.glob(os.path.join(ROOT, 'work', 'kr', '*.CPK')))}
+    print('동영상 %d개' % len(mov))
+    sub.update(mov)
+    iso.patch_sub(OUT, sub)
     print('→', OUT)
 
 
