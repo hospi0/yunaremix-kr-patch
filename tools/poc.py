@@ -14,7 +14,7 @@ import bdf, iso
 
 ROM = r'C:\claude\roms\ss\Ginga Ojousama Densetsu Yuna Remix (Japan)\Ginga Ojousama Densetsu Yuna Remix (Japan) (Track 1).bin'
 OUT = os.path.join(ROOT, 'work', 'out', os.path.basename(ROM))
-FONT = r'C:\claude\utils\font\Galmuri-v2.40.3\Galmuri14.bdf'
+FONT = r'C:\claude\utils\font\Galmuri-v2.40.3\Galmuri11.bdf'
 BLK = 0x8000
 POC = [(0x8000, 1, '하룻밤이 지난 거리입니다'), (0x8000, 2, '어제 큰 소동 때문에\n주변은 엉망진창입니다')]
 
@@ -42,11 +42,12 @@ def free_codes(dat):
 
 
 def glyph(F, ch):
-    """갈무리14 → 16×16 1bpp(원래 글꼴처럼 오른쪽·아래로 붙은 자리: x 2‥, y 1‥)"""
+    """갈무리11 → 16×16 1bpp. ★게임은 칸의 x 4‥15(12px)만 12px 간격으로 찍는다(한자도 그 폭을 꽉 채움) —
+       갈무리14(13px)는 넘쳐 붙어 보였음(2026-10-01 실기) → 11px 몸을 x 4‥14(오른쪽 1px 여백), 세로 y 2‥12"""
     pts, _ = F.draw(ch, 0, 0)
     rows = [0] * 16
     for x, y in pts:
-        X, Y = x + 2, y - 3
+        X, Y = x + 4, y - 1
         if 0 <= X < 16 and 0 <= Y < 16:
             rows[Y] |= 0x8000 >> X
     return b''.join(r.to_bytes(2, 'big') for r in rows)
