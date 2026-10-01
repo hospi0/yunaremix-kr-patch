@@ -1,0 +1,8 @@
+# 허용 목록: 소스·문서만
+*
+!.gitignore
+!README.md
+!tools/
+!tools/*.py
+!docs/
+!docs/*.md
