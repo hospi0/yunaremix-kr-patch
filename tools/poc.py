@@ -10,13 +10,14 @@ import os, re, struct, sys
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 sys.path.insert(0, r'C:\claude\project\anearth-kr-patch\tools')
-import bdf, iso
+import bdf, iso, gfx, gfx_title
 
 ROM = r'C:\claude\roms\ss\Ginga Ojousama Densetsu Yuna Remix (Japan)\Ginga Ojousama Densetsu Yuna Remix (Japan) (Track 1).bin'
 OUT = os.path.join(ROOT, 'work', 'out', os.path.basename(ROM))
 FONT = r'C:\claude\utils\font\Galmuri-v2.40.3\Galmuri11.bdf'
 BLK = 0x8000
-POC = [(0x8000, 1, '하룻밤이 지난 거리입니다'), (0x8000, 2, '어제 큰 소동 때문에\n주변은 엉망진창입니다')]
+POC = [(0x8000, 1, '하룻밤이 지난 거리입니다'), (0x8000, 2, '어제 큰 소동 때문에\n주변은 엉망진창입니다'),
+       (0x8000, 3, '어떡하지‥‥\n이웃들한테 뭐라고 사과해야 하지')]     # 초상화 대사(머리 «B») — 한 줄 19칸
 
 
 def jis_index(code):
@@ -72,6 +73,8 @@ def main():
                 enc.append(0x0A); continue
             if ch == ' ':
                 enc += '　'.encode('cp932'); continue
+            if not '가' <= ch <= '힣':
+                enc += ch.encode('cp932'); continue          # 부호(‥ 등)는 원래 글꼴 그대로
             if ch not in amap:
                 c = codes[len(amap)]; amap[ch] = c
                 i = jis_index(c); fon[i * 32:i * 32 + 32] = glyph(F, ch)
@@ -84,7 +87,11 @@ def main():
         print('블록 %X 대사 %d: «%s» → «%s» (%d B, 오프셋 %X→%X)' % (b0, k, old.decode('cp932'), text, len(enc), offs[k], new_off))
     print('한글 음절 %d → 한자 칸 %s‥' % (len(amap), list(amap.values())[0].hex()))
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    iso.patch(ROM, OUT, {'YUNA1.DAT': bytes(dat), 'KANJI.FON': bytes(fon)})
+    G = gfx.build()[0]                                          # 옵션·달력 한글 그림(2026-10-01)
+    files = {'YUNA1.DAT': bytes(dat), 'KANJI.FON': bytes(fon), 'TITPS.CSA': G['TITPS.CSA']}
+    files.update(gfx_title.main())                              # 제목 로고 TBG00‥12.SS1(크기 달라짐 — 넘치면 끝으로 옮김)
+    iso.patch(ROM, OUT, files)
+    iso.patch_sub(OUT, {'CALDATA/CLTES3.GS8': G['CALDATA/CLTES3.GS8']})
     print('→', OUT)
 
 
