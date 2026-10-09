@@ -115,7 +115,91 @@ def patch_bin(font):
     if errs:
         raise SystemExit('⛔111.BIN ' + ' · '.join(errs[:10]))
     print('111.BIN 시스템 메시지 제자리 %d · 옮김 %d (%d B 사용)' % (nin, nmv, cur - BIN_FREE[0]))
+    # ★글 창 버튼 대기 0x0602098C 의 «음성 재생 중이면(0x0601F174 ≠0) 버튼을 안 읽고 기다림»을 건너뜀 →
+    #   음성이 나오는 동안에도 창을 넘길 수 있다(2026-10-09 실기 «음성이 다 끝나야 넘어감» — 긴 음성 하나에 창 여럿인 새 자막).
+    #   원래 대본의 음성 562곳은 전부 뒤에 0x0041(음성 끝 대기)이 있어 일반 대사의 음성은 안 끊긴다(전수 확인).
+    o = 0x060209AC - BIN_BASE
+    assert bytes(b[o:o + 4]) == bytes.fromhex('480B0009'), '버튼 대기 자리 다름'
+    b[o:o + 4] = bytes.fromhex('E0000009')            # JSR @R8(음성 재생 중?) ; NOP → MOV #0,R0 ; NOP
     return bytes(b)
+
+
+# ★글 없이 음성만 나오는 장면에 자막 붙이기(2026-10-09, docs/01 «자막 없는 음성»)
+#   대본이 [0x103F 음성][0x0041 대기] 만 늘어놓고 글(DAT 에 있음 — 대본이 안 부를 뿐)을 안 띄운다.
+#   → run(연속한 음성 자리)의 첫 0x103F 를 점프(0x1001, 주소 = 코드 기준 = 블록 오프셋 − 6)로 바꾸고, 코드 끝(마지막 0x0003 앞)에
+#     다른 대사와 같은 호출을 이어 붙인 뒤 되돌아온다. 0x5002 [루틴][얼굴][글 번호][일련번호][음성] · 0x4002 [루틴][글 번호][일련번호][음성]
+#     (일련번호 ≠0 = 음성+글+대기, 0 = 글만 — 한 음성에 대사가 여럿이면 둘째부터 0). 글이 없는 자리는 원래 [103F][0041] 그대로.
+#     그 뒤 문자열·대사표는 통째로 밀고 머리 A 만 늘림(참조는 전부 S 기준이라 그대로).
+#   다른 블록에만 있는 글은 대사표 끝에 새 번호로 덧붙이고(C 늘림, 대사 영역은 M 기준이라 그대로) 번역도 그 행 것을 씀.
+#   표 = tools/voice_table.py(python tools/voicetext.py table 이 받아쓰기·짝짓기로 만듦). 1장 블록 0x30000 은 실기 «완벽» 판 그대로.
+import voice_table
+VOICE_TEXT = dict(voice_table.VOICE_TEXT)
+VOICE_TEXT[0x30000] = [dict(at=0x0C36, back=0x0C90, spots=[(w, [(0x5002, sub, face, k, seq)]) for sub, face, k, seq, w in [
+    (0x100C, 0, 0x70, 0xD8, 'A_353.ACM'), (0x100C, 0, 0x72, 0xD9, 'A_354.ACM'), (0x10CC, 0, 0x73, 0xDA, 'A_355.ACM'),
+    (0x100C, 0, 0x74, 0xDB, 'A_356A.ACM'), (0x10CC, 0, 0x75, 0xDC, 'A_357.ACM'), (0x10CC, 0, 0x76, 0xDD, 'A_358.ACM'),
+    (0x10CC, 0, 0x77, 0xDE, 'A_359.ACM'), (0x100C, 0, 0x78, 0xDF, 'A_356.ACM'), (0x100C, 0, 0x79, 0xDF, 'A_360.ACM')]])]
+DAT0 = open(os.path.join(ROOT, 'work', 'disc', 'YUNA1.DAT'), 'rb').read()
+import voicetext
+VOICE_NEW = voicetext.load_new()
+
+
+def add_voice_text(d, b0, msg):
+    A, B, C = struct.unpack_from('<3H', d, 0); S = A + 6
+    strs = {}; p = 0
+    for x in bytes(d[S:S + B]).split(b'\0'):
+        strs[x] = strs.get(x, p); p += len(x) + 1
+    ntab = C // 2; newtexts = []                                  # 다른 블록 글 → 새 번호
+    code = bytearray(); base = A + 6          # ★마지막 0003(= 마지막 대사 루틴의 복귀) «뒤» — 앞에 넣으면 그 루틴이 덧붙인 코드로 흘러든다(2026-10-09 실기: 매니저 대사 뒤 1장 음성 재생)
+    for run in VOICE_TEXT[b0]:
+        p = run['at']; start = base + len(code)
+        for wav, lines in run['spots']:
+            op, fl, a0 = struct.unpack_from('<HHH', d, p); op2 = struct.unpack_from('<H', d, p + 6)[0]
+            assert (op, fl, op2) == (0x103F, 0, 0x0041) and a0 == strs[wav.encode()], ('음성 자리 다름', hex(b0), hex(p), wav)
+            p += 10
+            if not lines:
+                code += struct.pack('<5H', 0x103F, 0, a0, 0x0041, 0); continue
+            if lines == 'new':                                     # 글이 없던 음성: 음성 → 해설 창(얼굴 없음) 차례로 → 음성 끝 대기
+                code += struct.pack('<3H', 0x103F, 0, a0)
+                for jp, kr in VOICE_NEW[wav.upper()[:-4]]:
+                    k = ntab + len(newtexts); newtexts.append(jp.replace(NL, chr(10)).encode('cp932'))
+                    m = ['M99999', '0:0', '해설', '', '24', '1', jp, kr]
+                    t = rules.norm(kr, jp, m); e, _ = rules.check(m, t)
+                    if e:
+                        raise SystemExit('⛔음성 새 자막 %s: %s' % (wav, e))
+                    msg[(b0, k)] = ('', t)
+                    code += struct.pack('<3H', 0x1017, 0, k)
+                code += struct.pack('<2H', 0x0041, 0); continue
+            for i, (op, sub, face, tx, seq) in enumerate(lines):
+                if isinstance(tx, (tuple, list)):
+                    _, sb, sk = tx
+                    sA, sB, sC = struct.unpack_from('<3H', DAT0, sb); sT = sb + sA + 6 + sB; sM = sT + sC
+                    so = struct.unpack_from('<H', DAT0, sT + 2 * sk)[0]
+                    jp = DAT0[sM + so:DAT0.index(0, sM + so)]
+                    if (sb, sk) not in msg:
+                        raise SystemExit('⛔음성 자막: 베껴 올 번역 없음 %X:%X' % (sb, sk))
+                    tx = ntab + len(newtexts); newtexts.append(jp); msg[(b0, tx)] = msg[(sb, sk)]
+                sq = seq if i == 0 else 0
+                code += (struct.pack('<7H', 0x5002, 0, sub, face, tx, sq, a0) if op == 0x5002 else
+                         struct.pack('<6H', 0x4002, 0, sub, tx, sq, a0))
+        assert p == run['back'], (hex(b0), hex(p))
+        code += struct.pack('<3H', 0x1001, 0, run['back'] - 6)
+        struct.pack_into('<3H', d, run['at'], 0x1001, 0, start - 6)   # 나머지 옛 명령 바이트는 건너뛰어 안 쓰임
+    assert struct.unpack_from('<HH', d, A + 2) == (0x0003, 0), '코드 끝 0003 아님'
+    code += struct.pack('<2H', 0x0003, 0)      # 블록 모양 유지: 마지막 명령 = 0003, 그 시작 = A+2
+    grow = len(code) + 2 * len(newtexts)
+    assert not any(d[BLK - grow - sum(len(t) + 1 for t in newtexts):]), '블록 끝 빈 곳 부족 %X' % b0
+    d = bytearray(d[:base] + code + d[base:BLK - len(code)])
+    A += len(code); struct.pack_into('<H', d, 0, A)
+    if newtexts:                                                   # 대사표 끝에 새 번호(M 이 2n 밀림 — 대사 영역은 M 기준이라 그대로)
+        S = A + 6; T = S + B; M = T + C
+        offs = struct.unpack_from('<%dH' % ntab, d, T)
+        end = max(d.index(0, M + o) + 1 for o in offs if M + o < BLK)
+        add = bytearray(); no = []
+        for jp in newtexts:
+            no.append(end + 2 * len(newtexts) + len(add) - (M + 2 * len(newtexts))); add += jp + b'\0'
+        d = bytearray(d[:M] + struct.pack('<%dH' % len(no), *no) + d[M:end] + add + d[end:])[:BLK]
+        struct.pack_into('<H', d, 4, C + 2 * len(newtexts))
+    return d
 
 
 def main():
@@ -145,6 +229,8 @@ def main():
     nmsg = nin = nmove = 0
     for b0 in range(0, len(dat), BLK):
         d = bytearray(dat[b0:b0 + BLK])
+        if b0 in VOICE_TEXT:
+            d = add_voice_text(d, b0, msg)
         A, B, C, E = struct.unpack_from('<HHHH', d, 0)
         S = A + 6; T = S + B; M = T + C
         offs = list(struct.unpack_from('<%dH' % (C // 2), d, T))

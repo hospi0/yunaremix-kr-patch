@@ -8,7 +8,7 @@ HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 import poc
 
-VER = 'v0.9'
+VER = 'v0.91'
 XDELTA = r'C:\claude\utils\xdelta.exe'
 NAME = 'YunaRemix_KR_' + VER
 TITLE = '은하 아가씨 전설 유나 리믹스 (세가 새턴 일본판) 한글 패치 ' + VER
@@ -54,6 +54,8 @@ BODY = """
   - 시스템 메시지(저장·불러오기·전투 문구 등)
   - 동영상 자막(오프닝 가사·프롤로그·각 장 이벤트·엔딩) - 원래 영상에 없던 자막을 새로 넣음
   - 장소 소개 영상의 지명 글자(일본어 → 한국어)
+  - 원판에서 글 없이 음성만 나오던 장면 82곳(행성 소개·도착 대화·전투 뒤 대화 등)에 자막을 새로 넣음
+  - 음성이 나오는 중에도 버튼으로 대사창을 넘길 수 있음(음성은 끝까지 나옴)
   - 그림: 옵션 화면, 달력, 장 제목
 
 
@@ -67,12 +69,12 @@ BAT = r"""@echo off
 chcp 949 >nul
 set "XD=%~dp0xdelta.exe"
 if not exist "%~dp0{bin}" (
-  echo   [오류] 원본 트랙 1 파일을 이 폴더에 넣어 주세요(readme 참고).
+  echo   [오류] 원본 트랙 1 파일을 이 폴더에 넣어 주세요 - readme 참고.
   pause & exit /b 1
 )
 "%XD%" -d -f -s "%~dp0{bin}" "%~dp0{patch}" "%~dp0{kbin}"
 if errorlevel 1 (
-  echo   [오류] 패치 실패 - 원본이 다를 수 있습니다(readme 의 원본md5 확인).
+  echo   [오류] 패치 실패 - 원본이 다를 수 있습니다 - readme 의 원본md5 확인.
   pause & exit /b 1
 )
 echo   완료: "{kbin}"

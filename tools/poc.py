@@ -12,7 +12,8 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, r'C:\claude\project\anearth-kr-patch\tools')
 import bdf, iso, gfx, gfx_title
 
-ROM = r'C:\claude\roms\ss\Ginga Ojousama Densetsu Yuna Remix (Japan)\Ginga Ojousama Densetsu Yuna Remix (Japan) (Track 1).bin'
+ROM = next(p for p in (r'C:\claude\roms\ss\완료\Ginga Ojousama Densetsu Yuna Remix (Japan)\Ginga Ojousama Densetsu Yuna Remix (Japan) (Track 1).bin',   # 완료 폴더로 옮김(2026-10)
+                      r'C:\claude\roms\ss\Ginga Ojousama Densetsu Yuna Remix (Japan)\Ginga Ojousama Densetsu Yuna Remix (Japan) (Track 1).bin') if os.path.exists(p))
 OUT = os.path.join(ROOT, 'work', 'out', os.path.basename(ROM))
 FONT = r'C:\claude\utils\font\Galmuri-v2.40.3\Galmuri11.bdf'
 BLK = 0x8000
