@@ -121,7 +121,23 @@ def patch_bin(font):
     o = 0x060209AC - BIN_BASE
     assert bytes(b[o:o + 4]) == bytes.fromhex('480B0009'), '버튼 대기 자리 다름'
     b[o:o + 4] = bytes.fromhex('E0000009')            # JSR @R8(음성 재생 중?) ; NOP → MOV #0,R0 ; NOP
+    # ★전투 이름 길이 표(2026-10-10 «요시와 공격»): 「의 공격」「의 대미지…」 같은 꼬리는 x = 이름 x + 표[인물]×글자 폭 에 찍는다
+    #   (0x0600DDD0 0x0604E2B4[인물] × 0x0604E100). 표 = 원문 글자 수라 한글 이름이 길면 꼬리가 이름 끝 글자 위에 겹쳤다(요시카+의 → «와»).
+    #   → 이름 표 0x0604E590(8 B 간격, 이름 포인터)의 각 이름을 «번역 글자 수»로 다시 채움(짧은 이름 사이 빈칸도 사라짐).
+    ko = {}
+    for ln in open(os.path.join(ROOT, 'work', 'trans', 'bin_ko.tsv'), encoding='utf-8').read().split('\n')[1:]:
+        if ln.strip():
+            oo, t = ln.split('\t'); ko[int(oo, 16)] = rules.norm(t)
+    NAMES, LENS = 0x0604E590 - BIN_BASE, 0x0604E2B4 - BIN_BASE
+    for i in range(18):
+        p = struct.unpack_from('>I', DAT_BIN0, NAMES + 8 * i)[0] - BIN_BASE
+        jp = DAT_BIN0[p:DAT_BIN0.index(0, p)].decode('cp932')
+        assert struct.unpack_from('>I', DAT_BIN0, LENS + 4 * i)[0] == len(jp), ('이름 길이 표가 원문 글자 수와 다름', i)
+        struct.pack_into('>I', b, LENS + 4 * i, len(ko[p]))
     return bytes(b)
+
+
+DAT_BIN0 = open(os.path.join(ROOT, 'work', 'disc', '111.BIN'), 'rb').read()   # 원본 111.BIN(이름 길이 표 검산용)
 
 
 # ★글 없이 음성만 나오는 장면에 자막 붙이기(2026-10-09, docs/01 «자막 없는 음성»)

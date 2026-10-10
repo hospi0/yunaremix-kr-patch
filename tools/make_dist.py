@@ -8,7 +8,7 @@ HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 import poc
 
-VER = 'v0.91'
+VER = 'v0.92'
 XDELTA = r'C:\claude\utils\xdelta.exe'
 NAME = 'YunaRemix_KR_' + VER
 TITLE = '은하 아가씨 전설 유나 리믹스 (세가 새턴 일본판) 한글 패치 ' + VER
